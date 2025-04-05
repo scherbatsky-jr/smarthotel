@@ -1,0 +1,19 @@
+services:
+  smarthotel_backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: smarthotel_backend:dev
+    container_name: smarthotel_backend
+    ports:
+      - "10205:8000"
+    volumes:
+      - .:/app
+    networks:
+      - smarthotel_network
+    env_file:
+      - .env
+    restart: unless-stopped
+networks:
+  smarthotel_network:
+    external: true

@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  smartHotel_timescaledb:
+    image: timescale/timescaledb:latest-pg14
+    container_name: smartHotel_timescaledb
+    ports:
+      - "10201:5432"  # TimescaleDB
+    environment:
+      POSTGRES_USER: altoadmin
+      POSTGRES_PASSWORD: altopassword
+      POSTGRES_DB: smart_hotel
+    volumes:
+      - smartHotel_timescale_data:/var/lib/postgresql/data
+      - ./init/timescale:/docker-entrypoint-initdb.d
+    networks:
+      - smarthotel_network
+    restart: unless-stopped
+
+  smartHotel_postgres:
+    image: postgres:14
+    container_name: smartHotel_postgres
+    ports:
+      - "10202:5432"  # PostgreSQL
+    environment:
+      POSTGRES_USER: altoadmin
+      POSTGRES_PASSWORD: altopassword
+      POSTGRES_DB: relational_db
+    volumes:
+      - smartHotel_pg_data:/var/lib/postgresql/data
+    networks:
+      - smarthotel_network
+    restart: unless-stopped
+
+  smartHotel_rabbitmq:
+    image: rabbitmq:3-management
+    container_name: smartHotel_rabbitmq
+    ports:
+      - "10203:5672"   # RabbitMQ Broker
+      - "10204:15672"  # RabbitMQ UI
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    networks:
+      - smarthotel_network
+    restart: unless-stopped
+
+  smartHotel_pgadmin:
+    image: dpage/pgadmin4
+    container_name: smartHotel_pgadmin
+    ports:
+      - "10206:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@alto.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    volumes:
+      - smartHotel_pgadmin_data:/var/lib/pgadmin
+    networks:
+      - smarthotel_network
+    restart: unless-stopped
+
+volumes:
+  smartHotel_timescale_data:
+  smartHotel_pg_data:
+  smartHotel_pgadmin_data:
+
+networks:
+  smarthotel_network:
+    external: true
+

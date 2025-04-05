@@ -1,0 +1,18 @@
+services:
+  smarthotel_frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: smarthotel_frontend
+    ports:
+      - "10207:5173"
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    networks:
+     - smarthotel_network
+
+networks:
+  smarthotel_network:
+    external: true
