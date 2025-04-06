@@ -5,17 +5,7 @@ import psycopg2
 from datetime import datetime
 from dotenv import load_dotenv
 from supabase import create_client
-
-load_dotenv()
-
-# TimescaleDB
-TS_DB = {
-    "host": os.getenv("TS_DB_HOST"),
-    "port": int(os.getenv("TS_DB_PORT", 5432)),
-    "dbname": os.getenv("TS_DB_NAME"),
-    "user": os.getenv("TS_DB_USER"),
-    "password": os.getenv("TS_DB_PASS"),
-}
+from django.db import connections
 
 # Supabase
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -27,18 +17,15 @@ RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "localhost")
 EXCHANGE_NAME = "iot_exchange"
 
 def insert_timescale(device_id, datapoint, value, dt):
-    conn = psycopg2.connect(**TS_DB)
-    cursor = conn.cursor()
     timestamp = int(dt.timestamp())
-    cursor.execute(
-        """
-        INSERT INTO raw_data (timestamp, datetime, device_id, datapoint, value)
-        VALUES (%s, %s, %s, %s, %s)
-        """, (timestamp, dt, device_id, datapoint, str(value))
-    )
-    conn.commit()
-    cursor.close()
-    conn.close()
+    with connections['default'].cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO raw_data (timestamp, datetime, device_id, datapoint, value)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            (timestamp, dt, device_id, datapoint, str(value))
+        )
 
 def upsert_supabase(device_id, datapoint, value):
     try:

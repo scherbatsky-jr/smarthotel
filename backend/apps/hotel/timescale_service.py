@@ -1,9 +1,6 @@
-import os
-import psycopg2
 import csv
-import pandas as pd
 from io import StringIO
-from django.db import connection, connections
+from django.db import connections, connection
 
 SUBSYSTEM_DEVICE_MAP = {
     "ac": ["power_meter_1", "power_meter_2", "power_meter_3"],
@@ -12,7 +9,6 @@ SUBSYSTEM_DEVICE_MAP = {
 }
 
 def get_energy_consumption_by_room(room_id, resolution, start_time=None, end_time=None, subsystem=None):
-    # Step 1: Fetch power_meter device_ids from default DB (Postgres)
     with connection.cursor() as cursor:
         cursor.execute("""
             SELECT device_id FROM hotel_device
@@ -20,119 +16,20 @@ def get_energy_consumption_by_room(room_id, resolution, start_time=None, end_tim
         """, [room_id])
         all_devices = [row[0] for row in cursor.fetchall()]
 
-    # Step 2: Subsystem filter
+    if not all_devices:
+        return "timestamp\n"
+
+    # Filter devices by subsystem if provided
     filtered_devices = []
     if subsystem:
         keys = SUBSYSTEM_DEVICE_MAP.get(subsystem.lower())
-        if keys:
-            for d in all_devices:
-                if any(k in d for k in keys):
-                    filtered_devices.append(d)
+        filtered_devices = [d for d in all_devices if any(k in d for k in keys)]
     else:
         filtered_devices = all_devices
 
     if not filtered_devices:
-        return {"error": "No matching devices found for the room and subsystem."}
+        return "timestamp\n"
 
-    # Step 3: Prepare time_bucket resolution
-    time_bucket_interval = {
-        "1hour": "1 hour",
-        "1day": "1 day",
-        "1month": "1 month"
-    }.get(resolution, "1 hour")
-
-    placeholders = ",".join(["%s"] * len(filtered_devices))
-    sql_params = [time_bucket_interval] + filtered_devices
-
-    query = f"""
-        SELECT time_bucket(%s::interval, datetime) as bucket,
-            device_id,
-            AVG(value::FLOAT) as avg_kw
-        FROM raw_data
-        WHERE device_id IN ({placeholders})
-        AND datapoint = 'power'
-    """
-    if start_time:
-        query += " AND datetime >= %s"
-        sql_params.append(start_time)
-    if end_time:
-        query += " AND datetime <= %s"
-        sql_params.append(end_time)
-
-    query += " GROUP BY bucket, device_id ORDER BY bucket"
-
-    # Step 4: Run the query using the timescale DB
-    with connections["timescale"].cursor() as cursor:
-        cursor.execute(query, sql_params)
-        rows = cursor.fetchall()
-
-    # 5. Aggregate energy (kWh) per subsystem
-    summary = {}
-    for bucket, device_id, avg_kw in rows:
-        ts = bucket.isoformat()
-        energy = avg_kw * 1  # assuming 1 hour duration
-
-        subsystem_type = None
-        for sys, keys in SUBSYSTEM_DEVICE_MAP.items():
-            if any(k in device_id for k in keys):
-                subsystem_type = sys
-                break
-
-        if subsystem_type:
-            if ts not in summary:
-                summary[ts] = {}
-            summary[ts].setdefault(subsystem_type, 0.0)
-            summary[ts][subsystem_type] += energy
-
-    # Step 6: Format CSV
-    output = StringIO()
-    writer = csv.writer(output)
-
-    # Determine which subsystems to show
-    columns = []
-    if subsystem:
-        columns = [subsystem.lower()]
-    else:
-        columns = ["ac", "lighting", "plug_load"]
-
-    writer.writerow(["timestamp"] + columns)
-
-    for ts in sorted(summary.keys()):
-        row = [ts]
-        for col in columns:
-            row.append(round(summary[ts].get(col, 0.0), 2))
-        writer.writerow(row)
-
-    return output.getvalue()
-
-
-def get_energy_consumption_by_hotel(hotel_id, resolution, start_time=None, end_time=None, subsystem=None):
-    # Step 1: Find all power meters in this hotel
-    with connection.cursor() as cursor:
-        cursor.execute("""
-            SELECT d.device_id
-            FROM hotel_device d
-            JOIN hotel_room r ON d.room_id = r.id
-            JOIN hotel_floor f ON r.floor_id = f.id
-            WHERE d.device_type = 'power_meter' AND f.hotel_id = %s
-        """, [hotel_id])
-        all_devices = [row[0] for row in cursor.fetchall()]
-
-    # Step 2: Filter by subsystem if needed
-    filtered_devices = []
-    if subsystem:
-        keys = SUBSYSTEM_DEVICE_MAP.get(subsystem.lower())
-        if keys:
-            for d in all_devices:
-                if any(k in d for k in keys):
-                    filtered_devices.append(d)
-    else:
-        filtered_devices = all_devices
-
-    if not filtered_devices:
-        return "timestamp\n"  # empty CSV
-
-    # Step 3: Query TimescaleDB
     time_bucket_interval = {
         "1hour": "1 hour",
         "1day": "1 day",
@@ -159,36 +56,103 @@ def get_energy_consumption_by_hotel(hotel_id, resolution, start_time=None, end_t
 
     query += " GROUP BY bucket, device_id ORDER BY bucket"
 
-    with connections["timescale"].cursor() as cursor:
+    with connections["default"].cursor() as cursor:
         cursor.execute(query, sql_params)
         rows = cursor.fetchall()
 
-    # Step 4: Aggregate per subsystem
     summary = {}
     for bucket, device_id, avg_kw in rows:
         ts = bucket.isoformat()
         energy = avg_kw * 1
-        subsystem_type = None
-        for sys, keys in SUBSYSTEM_DEVICE_MAP.items():
-            if any(k in device_id for k in keys):
-                subsystem_type = sys
-                break
+        subsystem_type = next((k for k, v in SUBSYSTEM_DEVICE_MAP.items() if any(key in device_id for key in v)), None)
         if subsystem_type:
-            if ts not in summary:
-                summary[ts] = {}
-            summary[ts][subsystem_type] = summary[ts].get(subsystem_type, 0.0) + energy
+            summary.setdefault(ts, {}).setdefault(subsystem_type, 0.0)
+            summary[ts][subsystem_type] += energy
 
-    # Step 5: Generate CSV
     output = StringIO()
     writer = csv.writer(output)
 
-    columns = [subsystem.lower()] if subsystem else ["ac", "lighting", "plug_load"]
+    columns = [subsystem.lower()] if subsystem else list(SUBSYSTEM_DEVICE_MAP.keys())
     writer.writerow(["timestamp"] + columns)
 
     for ts in sorted(summary.keys()):
-        row = [ts]
-        for col in columns:
-            row.append(round(summary[ts].get(col, 0.0), 2))
+        row = [ts] + [round(summary[ts].get(col, 0.0), 2) for col in columns]
+        writer.writerow(row)
+
+    return output.getvalue()
+
+
+def get_energy_consumption_by_hotel(hotel_id, resolution, start_time=None, end_time=None, subsystem=None):
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT d.device_id
+            FROM hotel_device d
+            JOIN hotel_room r ON d.room_id = r.id
+            JOIN hotel_floor f ON r.floor_id = f.id
+            WHERE d.device_type = 'power_meter' AND f.hotel_id = %s
+        """, [hotel_id])
+        all_devices = [row[0] for row in cursor.fetchall()]
+
+    if not all_devices:
+        return "timestamp\n"
+
+    filtered_devices = []
+    if subsystem:
+        keys = SUBSYSTEM_DEVICE_MAP.get(subsystem.lower())
+        filtered_devices = [d for d in all_devices if any(k in d for k in keys)]
+    else:
+        filtered_devices = all_devices
+
+    if not filtered_devices:
+        return "timestamp\n"
+
+    time_bucket_interval = {
+        "1hour": "1 hour",
+        "1day": "1 day",
+        "1month": "1 month"
+    }.get(resolution, "1 hour")
+
+    placeholders = ",".join(["%s"] * len(filtered_devices))
+    sql_params = [time_bucket_interval] + filtered_devices
+
+    query = f"""
+        SELECT time_bucket(%s::interval, datetime) as bucket,
+               device_id,
+               AVG(value::FLOAT) as avg_kw
+        FROM raw_data
+        WHERE device_id IN ({placeholders})
+          AND datapoint = 'power'
+    """
+    if start_time:
+        query += " AND datetime >= %s"
+        sql_params.append(start_time)
+    if end_time:
+        query += " AND datetime <= %s"
+        sql_params.append(end_time)
+
+    query += " GROUP BY bucket, device_id ORDER BY bucket"
+
+    with connections["default"].cursor() as cursor:
+        cursor.execute(query, sql_params)
+        rows = cursor.fetchall()
+
+    summary = {}
+    for bucket, device_id, avg_kw in rows:
+        ts = bucket.isoformat()
+        energy = avg_kw * 1
+        subsystem_type = next((k for k, v in SUBSYSTEM_DEVICE_MAP.items() if any(key in device_id for key in v)), None)
+        if subsystem_type:
+            summary.setdefault(ts, {}).setdefault(subsystem_type, 0.0)
+            summary[ts][subsystem_type] += energy
+
+    output = StringIO()
+    writer = csv.writer(output)
+
+    columns = [subsystem.lower()] if subsystem else list(SUBSYSTEM_DEVICE_MAP.keys())
+    writer.writerow(["timestamp"] + columns)
+
+    for ts in sorted(summary.keys()):
+        row = [ts] + [round(summary[ts].get(col, 0.0), 2) for col in columns]
         writer.writerow(row)
 
     return output.getvalue()

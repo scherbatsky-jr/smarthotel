@@ -1,46 +1,33 @@
 version: '3.8'
 
 services:
-  smartHotel_timescaledb:
+  smartHotel_db:
     image: timescale/timescaledb:latest-pg14
-    container_name: smartHotel_timescaledb
+    container_name: smartHotel_db
     ports:
-      - "10201:5432"  # TimescaleDB
+      - "${PG_PORT}:5432" 
     environment:
-      POSTGRES_USER: altoadmin
-      POSTGRES_PASSWORD: altopassword
-      POSTGRES_DB: smart_hotel
+      POSTGRES_USER: ${PG_USER}
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+      POSTGRES_DB: ${PG_DB}
     volumes:
-      - smartHotel_timescale_data:/var/lib/postgresql/data
-      - ./init/timescale:/docker-entrypoint-initdb.d
+      - smartHotel_db_data:/var/lib/postgresql/data
     networks:
       - smarthotel_network
     restart: unless-stopped
-
-  smartHotel_postgres:
-    image: postgres:14
-    container_name: smartHotel_postgres
-    ports:
-      - "10202:5432"  # PostgreSQL
-    environment:
-      POSTGRES_USER: altoadmin
-      POSTGRES_PASSWORD: altopassword
-      POSTGRES_DB: relational_db
-    volumes:
-      - smartHotel_pg_data:/var/lib/postgresql/data
-    networks:
-      - smarthotel_network
-    restart: unless-stopped
+    command: >
+      postgres
+      -c shared_preload_libraries=timescaledb
 
   smartHotel_rabbitmq:
     image: rabbitmq:3-management
     container_name: smartHotel_rabbitmq
     ports:
-      - "10203:5672"   # RabbitMQ Broker
-      - "10204:15672"  # RabbitMQ UI
+      - "${RABBITMQ_BROKER_PORT}:5672"
+      - "${RABBITMQ_UI_PORT}:15672"
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
     networks:
       - smarthotel_network
     restart: unless-stopped
@@ -49,10 +36,10 @@ services:
     image: dpage/pgadmin4
     container_name: smartHotel_pgadmin
     ports:
-      - "10206:80"
+      - "${PGADMIN_PORT}:80"
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@alto.com
-      PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
     volumes:
       - smartHotel_pgadmin_data:/var/lib/pgadmin
     networks:
@@ -60,11 +47,9 @@ services:
     restart: unless-stopped
 
 volumes:
-  smartHotel_timescale_data:
-  smartHotel_pg_data:
+  smartHotel_db_data:
   smartHotel_pgadmin_data:
 
 networks:
   smarthotel_network:
     external: true
-

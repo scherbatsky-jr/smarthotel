@@ -23,8 +23,8 @@ class Room(models.Model):
 
 class Device(models.Model):
     DEVICE_TYPES = [
-        ("iaq", "IAQ Sensor"),
-        ("life_being", "Life Being Sensor"),
+        ("iaq_sensor", "IAQ Sensor"),
+        ("presence_sensor", "Presence Sensor"),
         ("power_meter", "Power Meter"),
     ]
 
@@ -55,4 +55,4 @@ class Reservation(models.Model):
     passkey = models.CharField(max_length=50, unique=True)
 
     def __str__(self):
-        return f"{self.guest} - {self.room.name}"
+        return f"{self.guest} - {self.room.number}"

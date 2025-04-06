@@ -41,7 +41,7 @@ class Migration(migrations.Migration):
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('device_id', models.CharField(max_length=50, unique=True)),
-                ('device_type', models.CharField(choices=[('iaq', 'IAQ Sensor'), ('life_being', 'Life Being Sensor'), ('power_meter', 'Power Meter')], max_length=20)),
+                ('device_type', models.CharField(choices=[('iaq_sensor', 'IAQ Sensor'), ('presence_sensor', 'Presence Sensor'), ('power_meter', 'Power Meter')], max_length=20)),
                 ('metadata', models.JSONField(blank=True, null=True)),
                 ('room', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='devices', to='hotel.room')),
             ],
