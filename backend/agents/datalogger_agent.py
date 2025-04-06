@@ -17,14 +17,13 @@ RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "localhost")
 EXCHANGE_NAME = "iot_exchange"
 
 def insert_timescale(device_id, datapoint, value, dt):
-    timestamp = int(dt.timestamp())
     with connections['default'].cursor() as cursor:
         cursor.execute(
             """
-            INSERT INTO raw_data (timestamp, datetime, device_id, datapoint, value)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO raw_data ( datetime, device_id, datapoint, value)
+            VALUES (%s, %s, %s, %s)
             """,
-            (timestamp, dt, device_id, datapoint, str(value))
+            (dt, device_id, datapoint, str(value))
         )
 
 def upsert_supabase(device_id, datapoint, value):
