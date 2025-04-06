@@ -4,20 +4,30 @@ import LoginPage from './pages/LoginPage';
 
 import './App.scss';
 import './assets/css/layout.scss';
-import { Navbar, Row, Col, Container } from 'react-bootstrap';
+import { Navbar, Row, Col, Container, Button } from 'react-bootstrap';
 
 function App() {
   const userInfo = localStorage.getItem("user_info");
+
+  const handleLogout = () => {
+    localStorage.removeItem("user_info");
+    window.location.href = "/login";
+  };
 
   return (
     <Router>
       <Container fluid className="p-0">
         <Row>
           <Col>
-            <Navbar bg="primary" variant="dark" fixed="top" className="shadow-sm">
-              <Container className="m-0">
-                <Navbar.Brand href="/">SmartHotel Assistant</Navbar.Brand>
-              </Container>
+            <Navbar bg="primary" variant="dark" fixed="top" className="shadow-sm justify-content-between">
+                <Container className="m-0 justify-content-between">
+                  <Navbar.Brand href="/">SmartHotel Assistant</Navbar.Brand>
+                  {userInfo && (
+                    <Button variant="outline-light" size="sm" onClick={handleLogout}>
+                      Logout
+                    </Button>
+                  )}
+                </Container>
             </Navbar>
           </Col>
         </Row>

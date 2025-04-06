@@ -16,7 +16,7 @@ export default function DashboardPanel() {
   const [lifeBeingData, setLifeBeingData] = useState<any>({});
 
   useEffect(() => {
-    const deviceIdPattern = `_H${hotel_id}_F${floor_id}_R${room_id}`;
+    const deviceIdPattern = `_R${room_id}`;
 
     const fetchInitialData = async () => {
       const { data, error } = await supabase
