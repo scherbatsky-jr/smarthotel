@@ -10,7 +10,9 @@ type DeviceData = {
 
 export default function DashboardPanel() {
   const userInfo = JSON.parse(localStorage.getItem("user_info") || "{}");
-  const { hotel_id, floor_id, room_id, guest_name, room_name, hotel_name } = userInfo;
+  const { hotel_id, floor_id, room_id, guest, room_name, hotel_name } = userInfo;
+
+  const guest_name = `${guest.first_name} ${guest.last_name}`
 
   const [iaqData, setIaqData] = useState<any>({});
   const [lifeBeingData, setLifeBeingData] = useState<any>({});
@@ -76,10 +78,9 @@ export default function DashboardPanel() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Dashboard</CardTitle>
+        <CardTitle>Welcome to {hotel_name}!</CardTitle>
       </CardHeader>
       <CardBody>
-        <h5>Welcome to {hotel_name}!</h5>
         <p>Guest Name: {guest_name}</p>
         <p>Room: {room_name}</p>
 

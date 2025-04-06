@@ -156,3 +156,9 @@ Start the app
 `make start`
 
 The django server will be running at `http://localhost:10206`
+
+## Entity Relationship Diagram
+
+Here is the simplified entity relationship diagram for the relational database.
+
+![ER Digaram](media/er.png)
