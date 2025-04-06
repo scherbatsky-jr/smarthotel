@@ -1,7 +1,15 @@
 import os
 import psycopg2
+import csv
 import pandas as pd
 from io import StringIO
+from django.db import connection, connections
+
+SUBSYSTEM_DEVICE_MAP = {
+    "ac": ["power_meter_1", "power_meter_2", "power_meter_3"],
+    "lighting": ["power_meter_4", "power_meter_5"],
+    "plug_load": ["power_meter_6"]
+}
 
 def get_timescale_connection():
     return psycopg2.connect(
@@ -12,65 +20,102 @@ def get_timescale_connection():
         password=os.getenv("TS_DB_PASS")
     )
 
-def insert_raw_data_row(device_id, datapoint, value, timestamp, datetime):
-    conn = get_timescale_connection()
-    cur = conn.cursor()
-    cur.execute(
-        """
-        INSERT INTO raw_data (timestamp, datetime, device_id, datapoint, value)
-        VALUES (%s, %s, %s, %s, %s)
-        """,
-        (timestamp, datetime, device_id, datapoint, str(value))
-    )
-    conn.commit()
-    cur.close()
-    conn.close()
+SUBSYSTEM_DEVICE_MAP = {
+    "ac": ["power_meter_1", "power_meter_2", "power_meter_3"],
+    "lighting": ["power_meter_4", "power_meter_5"],
+    "plug_load": ["power_meter_6"]
+}
 
-def get_energy_consumption(subsystems, resolution, start_time=None, end_time=None):
-    meters = []
-    from .constants import SUBSYSTEM_METERS
+def get_energy_consumption_by_room(room_id, resolution, start_time=None, end_time=None, subsystem=None):
+    # Step 1: Fetch power_meter device_ids from default DB (Postgres)
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT device_id FROM hotel_device
+            WHERE room_id = %s AND device_type = 'power_meter'
+        """, [room_id])
+        all_devices = [row[0] for row in cursor.fetchall()]
 
-    for subsystem in subsystems:
-        meters += SUBSYSTEM_METERS.get(subsystem, [])
-
-    if not meters:
-        return pd.DataFrame()
-
-    meters_sql = ",".join(f"'{m}'" for m in meters)
-
-    if resolution == "1hour":
-        time_bucket = "1 hour"
-    elif resolution == "1day":
-        time_bucket = "1 day"
-    elif resolution == "1month":
-        time_bucket = "1 month"
+    # Step 2: Subsystem filter
+    filtered_devices = []
+    if subsystem:
+        keys = SUBSYSTEM_DEVICE_MAP.get(subsystem.lower())
+        if keys:
+            for d in all_devices:
+                if any(k in d for k in keys):
+                    filtered_devices.append(d)
     else:
-        raise ValueError("Invalid resolution")
+        filtered_devices = all_devices
 
-    where_clause = f"WHERE datapoint = 'kW' AND device_id IN ({meters_sql})"
-    if start_time:
-        where_clause += f" AND datetime >= '{start_time}'"
-    if end_time:
-        where_clause += f" AND datetime <= '{end_time}'"
+    if not filtered_devices:
+        return {"error": "No matching devices found for the room and subsystem."}
+
+    # Step 3: Prepare time_bucket resolution
+    time_bucket_interval = {
+        "1hour": "1 hour",
+        "1day": "1 day",
+        "1month": "1 month"
+    }.get(resolution, "1 hour")
+
+    placeholders = ",".join(["%s"] * len(filtered_devices))
+    sql_params = [time_bucket_interval] + filtered_devices
 
     query = f"""
-        SELECT
-            time_bucket('{time_bucket}', datetime) AS bucket,
+        SELECT time_bucket(%s::interval, datetime) as bucket,
             device_id,
-            AVG(CAST(value AS FLOAT)) AS avg_kw,
-            COUNT(*) * EXTRACT(EPOCH FROM INTERVAL '5 seconds') / 3600 AS run_hours
+            AVG(value::FLOAT) as avg_kw
         FROM raw_data
-        {where_clause}
-        GROUP BY bucket, device_id
-        ORDER BY bucket ASC;
+        WHERE device_id IN ({placeholders})
+        AND datapoint = 'power'
     """
+    if start_time:
+        query += " AND datetime >= %s"
+        sql_params.append(start_time)
+    if end_time:
+        query += " AND datetime <= %s"
+        sql_params.append(end_time)
 
-    conn = get_timescale_connection()
-    df = pd.read_sql(query, conn)
-    conn.close()
+    query += " GROUP BY bucket, device_id ORDER BY bucket"
 
-    df["energy_kwh"] = df["avg_kw"] * df["run_hours"]
+    # Step 4: Run the query using the timescale DB
+    with connections["timescale"].cursor() as cursor:
+        cursor.execute(query, sql_params)
+        rows = cursor.fetchall()
 
-    result = df.groupby("bucket")["energy_kwh"].sum().reset_index()
+    # 5. Aggregate energy (kWh) per subsystem
+    summary = {}
+    for bucket, device_id, avg_kw in rows:
+        ts = bucket.isoformat()
+        energy = avg_kw * 1  # assuming 1 hour duration
 
-    return result
+        subsystem_type = None
+        for sys, keys in SUBSYSTEM_DEVICE_MAP.items():
+            if any(k in device_id for k in keys):
+                subsystem_type = sys
+                break
+
+        if subsystem_type:
+            if ts not in summary:
+                summary[ts] = {}
+            summary[ts].setdefault(subsystem_type, 0.0)
+            summary[ts][subsystem_type] += energy
+
+    # Step 6: Format CSV
+    output = StringIO()
+    writer = csv.writer(output)
+
+    # Determine which subsystems to show
+    columns = []
+    if subsystem:
+        columns = [subsystem.lower()]
+    else:
+        columns = ["ac", "lighting", "plug_load"]
+
+    writer.writerow(["timestamp"] + columns)
+
+    for ts in sorted(summary.keys()):
+        row = [ts]
+        for col in columns:
+            row.append(round(summary[ts].get(col, 0.0), 2))
+        writer.writerow(row)
+
+    return output.getvalue()

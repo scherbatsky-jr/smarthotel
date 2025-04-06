@@ -86,6 +86,14 @@ DATABASES = {
         'PASSWORD': os.getenv('PG_DB_PASS'),
         'HOST': os.getenv('PG_DB_HOST'),
         'PORT': os.getenv('PG_DB_PORT'),
+    },
+    'timescale': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv("TS_DB_NAME"),
+        'USER': os.getenv("TS_DB_USER"),
+        'PASSWORD': os.getenv("TS_DB_PASS"),
+        'HOST': os.getenv("TS_DB_HOST"),
+        'PORT': os.getenv("TS_DB_PORT"),
     }
 }
 

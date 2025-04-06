@@ -2,14 +2,10 @@ from django.db import connection
 from supabase import create_client
 import os
 
-from .timescale_service import get_energy_consumption
-
-
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-
 
 def fetch_latest_data_from_supabase(room_id):
     # Fetch device IDs from hotel_device table
@@ -47,12 +43,6 @@ def fetch_latest_data_from_supabase(room_id):
             "timestamp": lb.get("presence_state", {}).get("timestamp"),
         }
     }
-
-
-def download_energy_summary_csv(hotel_id, resolution, start_time=None, end_time=None, subsystem=None):
-    # Your Timescale aggregation logic should live in generate_energy_summary_csv
-    return get_energy_consumption(hotel_id, resolution, start_time, end_time, subsystem)
-
 
 def get_hotels():
     with connection.cursor() as cursor:
@@ -122,33 +112,9 @@ def get_sensors_by_room(room_id):
         for r in rows
     ]
 
-
-def get_hotel_summary(hotel_id):
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT name FROM hotel_hotel WHERE id = %s", [hotel_id])
-        name = cursor.fetchone()[0]
-
-        cursor.execute("SELECT COUNT(*) FROM hotel_floor WHERE hotel_id = %s", [hotel_id])
-        floor_count = cursor.fetchone()[0]
-
-        cursor.execute("""
-            SELECT COUNT(*) FROM hotel_room
-            WHERE floor_id IN (SELECT id FROM hotel_floor WHERE hotel_id = %s)
-        """, [hotel_id])
-        room_count = cursor.fetchone()[0]
-
-    return {
-        "hotel_id": hotel_id,
-        "name": name,
-        "floors": floor_count,
-        "rooms": room_count
-    }
-
 FUNCTION_RESOLVERS = {
     "get_latest_sensor_data": fetch_latest_data_from_supabase,
-    "download_energy_summary_csv": download_energy_summary_csv,
     "get_sensors_by_room": get_sensors_by_room,
-    "get_hotel_summary": get_hotel_summary,
     "get_floors_by_hotel": get_floors_by_hotel,
     "get_rooms_by_floor": get_rooms_by_floor,
 }

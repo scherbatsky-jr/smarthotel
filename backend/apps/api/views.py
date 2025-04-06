@@ -4,17 +4,13 @@ from django.http import HttpResponse
 from openai import OpenAI
 import os
 import json
-from supabase import create_client
-from django.conf import settings
-from django.db import connection
 
-from .timescale_service import get_energy_consumption
 from apps.hotel.models import Hotel, Floor, Room, Reservation
 from .serializers import HotelSerializer, FloorSerializer, RoomSerializer
 from .llm.functions import FUNCTIONS
 from .resolvers import FUNCTION_RESOLVERS
 from .utils import normalize_function_arguments
-
+from .timescale_service import get_energy_consumption_by_room
 from .resolvers import fetch_latest_data_from_supabase
 
 client = OpenAI(api_key=os.getenv("OPENAI_KEY"))
@@ -33,30 +29,6 @@ def get_floors_in_hotel(request, hotel_id):
 def get_rooms_on_floor(request, floor_id):
     rooms = Room.objects.filter(floor_id=floor_id)
     return Response(RoomSerializer(rooms, many=True).data)
-
-@api_view(['GET'])
-def hotel_energy_summary(request, hotel_id):
-    resolution = request.GET.get("resolution")
-    subsystem = request.GET.get("subsystem")  # optional
-    start_time = request.GET.get("start_time")
-    end_time = request.GET.get("end_time")
-
-    if not resolution:
-        return Response({"error": "Missing resolution"}, status=400)
-
-    subsystems = [subsystem] if subsystem else ["ac", "lighting", "plug_load"]
-
-    try:
-        df = get_energy_consumption(subsystems, resolution, start_time, end_time)
-    except Exception as e:
-        return Response({"error": str(e)}, status=500)
-
-    # Convert to CSV
-    csv_buffer = StringIO()
-    df.to_csv(csv_buffer, index=False)
-    csv_buffer.seek(0)
-
-    return HttpResponse(csv_buffer, content_type='text/csv')
 
 @api_view(["POST"])
 def login_by_passkey(request):
@@ -131,3 +103,27 @@ def chat_view(request):
 def get_latest_room_data(request, room_id):
     return Response(fetch_latest_data_from_supabase(room_id))
 
+@api_view(["GET"])
+def energy_summary_by_room_view(request, room_id):
+    resolution = request.query_params.get("resolution")
+    subsystem = request.query_params.get("subsystem")
+    start_time = request.query_params.get("start_time")
+    end_time = request.query_params.get("end_time")
+
+    if not resolution:
+        return Response({"error": "Missing required parameter: resolution"}, status=400)
+
+    csv_data = get_energy_consumption_by_room(
+        room_id=room_id,
+        resolution=resolution,
+        start_time=start_time,
+        end_time=end_time,
+        subsystem=subsystem
+    )
+
+    if isinstance(csv_data, dict) and "error" in csv_data:
+        return Response(csv_data, status=400)
+
+    response = HttpResponse(csv_data, content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename=room_{room_id}_energy_summary.csv'
+    return response
