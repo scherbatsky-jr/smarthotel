@@ -7,7 +7,8 @@ services:
     ports:
       - "10207:5173"
     volumes:
-      - .:/app
+      - ./src:/app/src
+      - ./index.html:/app/index.html
     env_file:
       - .env
     networks:
