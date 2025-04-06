@@ -14,18 +14,23 @@ FUNCTIONS = [
         }
     },
     {
-        "name": "download_energy_summary_csv",
-        "description": "Download a CSV summary of energy consumption for the guest's hotel.",
+        "name": "get_room_energy_summary",
+        "description": "Download energy consumption summary CSV for the guest's room over the reservation period.",
         "parameters": {
             "type": "object",
             "properties": {
-                "hotel_id": {"type": "string"},
-                "resolution": {"type": "string", "enum": ["1hour", "1day", "1month"]},
-                "start_time": {"type": "string"},
-                "end_time": {"type": "string"},
-                "subsystem": {"type": "string"}
+                "resolution": {
+                    "type": "string",
+                    "enum": ["1hour", "1day", "1month"],
+                    "description": "Time resolution for grouping energy data."
+                },
+                "subsystem": {
+                    "type": "string",
+                    "enum": ["ac", "lighting", "plug_load"],
+                    "description": "Filter by specific subsystem (optional)"
+                }
             },
-            "required": ["hotel_id", "resolution"]
+            "required": ["resolution"]
         }
     },
     {

@@ -75,14 +75,24 @@ def chat_view(request):
         fn_name = msg.function_call.name
         args = json.loads(msg.function_call.arguments)
 
-        args = normalize_function_arguments(fn_name, args, user_info)
+        try:
+            args = normalize_function_arguments(fn_name, args, user_info)
+        except PermissionError as e:
+            return Response({"reply": str(e)})
 
         resolver = FUNCTION_RESOLVERS.get(fn_name)
         if not resolver:
             return Response({"reply": f"Function {fn_name} is not yet implemented."})
 
         try:
-            result = resolver(**args)
+            # Only pass user_info separately if needed
+            if fn_name == "get_room_energy_summary":
+                # Remove room_id injected by LLM to avoid duplicate
+                args.pop("room_id", None)
+                result = resolver(user_info=user_info, **args)
+            else:
+                result = resolver(**args)
+
         except Exception as e:
             return Response({"reply": f"An error occurred while processing the function: {str(e)}"})
 

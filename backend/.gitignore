@@ -2,3 +2,4 @@
 agents/sample_data/*.csv
 logs/*.log
 .agents_pid
+media

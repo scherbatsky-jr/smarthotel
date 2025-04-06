@@ -1,6 +1,12 @@
 from django.db import connection
 from supabase import create_client
+from django.conf import settings
+from uuid import uuid4
+from django.utils.timezone import now
 import os
+
+from .timescale_service import get_energy_consumption_by_room
+from apps.hotel.models import Reservation
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
@@ -112,9 +118,51 @@ def get_sensors_by_room(room_id):
         for r in rows
     ]
 
+def get_room_energy_summary(resolution, subsystem=None, user_info=None):
+    if not user_info:
+        return {"error": "Missing guest context."}
+
+    room_id = user_info.get("room_id")
+    guest_name = user_info.get("guest_name")
+
+    if not room_id:
+        return {"error": "Missing room_id in user info."}
+
+    reservation = Reservation.objects.filter(room_id=room_id).order_by("-start_date").first()
+    if not reservation:
+        return {"error": "No reservation found for the given room."}
+
+    csv_content = get_energy_consumption_by_room(
+        room_id=room_id,
+        resolution=resolution,
+        start_time=reservation.start_date.isoformat(),
+        end_time=now().isoformat(),
+        subsystem=subsystem
+    )
+
+    # Save CSV to media folder
+    os.makedirs(os.path.join(settings.MEDIA_ROOT, "exports"), exist_ok=True)
+    filename = f"room_{room_id}_summary_{uuid4().hex[:8]}.csv"
+    filepath = os.path.join(settings.MEDIA_ROOT, "exports", filename)
+
+    with open(filepath, "w") as f:
+        f.write(csv_content)
+
+    public_url = f"{settings.BASE_URL}/api/downloads/{filename}"
+
+    return {
+        "guest_name": guest_name,
+        "room_id": room_id,
+        "start_date": reservation.start_date.isoformat(),
+        "end_date": now().isoformat(),
+        "csv_url": public_url
+    }
+
+
 FUNCTION_RESOLVERS = {
     "get_latest_sensor_data": fetch_latest_data_from_supabase,
     "get_sensors_by_room": get_sensors_by_room,
     "get_floors_by_hotel": get_floors_by_hotel,
     "get_rooms_by_floor": get_rooms_by_floor,
+    "get_room_energy_summary": get_room_energy_summary,
 }
