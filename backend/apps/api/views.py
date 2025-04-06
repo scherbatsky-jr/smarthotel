@@ -10,7 +10,7 @@ from .serializers import HotelSerializer, FloorSerializer, RoomSerializer
 from .llm.functions import FUNCTIONS
 from .resolvers import FUNCTION_RESOLVERS
 from .utils import normalize_function_arguments
-from .timescale_service import get_energy_consumption_by_room
+from .timescale_service import get_energy_consumption_by_room, get_energy_consumption_by_hotel
 from .resolvers import fetch_latest_data_from_supabase
 
 client = OpenAI(api_key=os.getenv("OPENAI_KEY"))
@@ -127,3 +127,23 @@ def energy_summary_by_room_view(request, room_id):
     response = HttpResponse(csv_data, content_type="text/csv")
     response["Content-Disposition"] = f'attachment; filename=room_{room_id}_energy_summary.csv'
     return response
+
+@api_view(["GET"])
+def energy_summary_by_hotel_view(request, hotel_id):
+    resolution = request.GET.get("resolution")
+    start_time = request.GET.get("start_time")
+    end_time = request.GET.get("end_time")
+    subsystem = request.GET.get("subsystem")
+
+    if not resolution:
+        return Response({"error": "Missing required parameter: resolution"}, status=400)
+
+    csv_data = get_energy_consumption_by_hotel(
+        hotel_id=hotel_id,
+        resolution=resolution,
+        start_time=start_time,
+        end_time=end_time,
+        subsystem=subsystem
+    )
+
+    return HttpResponse(csv_data, content_type="text/csv")
