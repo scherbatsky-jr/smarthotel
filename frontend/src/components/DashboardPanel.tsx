@@ -1,73 +1,125 @@
-import { useEffect, useState } from 'react';
-import { getRoomData } from '../services/hotelService';
-import { Container, Row, Col, Card, CardBody, CardTitle, CardHeader } from 'react-bootstrap';
-import { getUserInfo } from '../services/authService';
+import { useEffect, useState } from "react";
+import { supabase } from "../services/supabaseService";
+import { Card, CardHeader, CardTitle, CardBody, Row, Col } from "react-bootstrap";
+
+type DeviceData = {
+  device_id: string;
+  datapoint: string;
+  value: string | number;
+};
 
 export default function DashboardPanel() {
-  const [data, setData] = useState<any>(null);
-  const userInfo = getUserInfo();
+  const userInfo = JSON.parse(localStorage.getItem("user_info") || "{}");
+  const { hotel_id, floor_id, room_id, guest_name, room_name, hotel_name } = userInfo;
 
-  const roomId = userInfo?.room_id;
-  const guestName = `${userInfo?.guest.first_name} ${userInfo?.guest.last_name}`;
-  const hotelName = userInfo?.hotel_name;
-  const roomName = userInfo?.room_name;
+  const [iaqData, setIaqData] = useState<any>({});
+  const [lifeBeingData, setLifeBeingData] = useState<any>({});
 
   useEffect(() => {
-    if (roomId) {
-      getRoomData(roomId).then(setData);
-    }
-  }, [roomId]);
+    const deviceIdPattern = `_H${hotel_id}_F${floor_id}_R${room_id}`;
+
+    const fetchInitialData = async () => {
+      const { data, error } = await supabase
+        .from("realtime_data")
+        .select("*")
+        .like("device_id", `%${deviceIdPattern}`);
+
+      if (data) {
+        const iaq: any = {};
+        const lb: any = {};
+
+        data.forEach((row) => {
+          if (row.device_id.startsWith("iaq_sensor")) {
+            iaq[row.datapoint] = row.value;
+          } else if (row.device_id.startsWith("presence_sensor")) {
+            lb[row.datapoint] = row.value;
+          }
+        });
+
+        setIaqData(iaq);
+        setLifeBeingData(lb);
+      }
+
+      if (error) console.error("Error fetching initial data:", error);
+    };
+
+    fetchInitialData();
+
+    const channel = supabase
+    .channel("room-data")
+    .on(
+      "postgres_changes",
+      {
+        event: "UPDATE",
+        schema: "public",
+        table: "realtime_data"
+      },
+      (payload) => {
+        const { device_id, datapoint, value } = payload.new as DeviceData;
+
+        if (!device_id.includes(deviceIdPattern)) return;
+
+        if (device_id.startsWith("iaq_sensor")) {
+          setIaqData((prev: any) => ({ ...prev, [datapoint]: value }));
+        } else if (device_id.startsWith("presence_sensor")) {
+          setLifeBeingData((prev: any) => ({ ...prev, [datapoint]: value }));
+        }
+      }
+    )
+    .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [hotel_id, floor_id, room_id]);
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Welcome to {hotelName}!</CardTitle>
-        <p className="mb-0">
-          Guest: <strong>{guestName}</strong> <br />
-          Room: <strong>{roomName}</strong>
-        </p>
+        <CardTitle>Dashboard</CardTitle>
       </CardHeader>
-
       <CardBody>
-        <Container>
-          <Row>
-            <Col xs={6}>
-              <Card>
-                <CardBody>
-                  <CardTitle>Temperature</CardTitle>
-                  {data?.iaq?.temperature ?? 'N/A'}
-                </CardBody>
-              </Card>
-            </Col>
-            <Col xs={6}>
-              <Card>
-                <CardBody>
-                  <CardTitle>Humidity</CardTitle>
-                  {data?.iaq?.humidity ?? 'N/A'}
-                </CardBody>
-              </Card>
-            </Col>
-          </Row>
+        <h5>Welcome to {hotel_name}!</h5>
+        <p>Guest Name: {guest_name}</p>
+        <p>Room: {room_name}</p>
 
-          <Row className="mt-3">
-            <Col xs={6}>
-              <Card>
-                <CardBody>
-                  <CardTitle>CO₂</CardTitle>
-                  {data?.iaq?.co2 ?? 'N/A'}
-                </CardBody>
-              </Card>
-            </Col>
-            <Col xs={6}>
-              <Card>
-                <CardBody>
-                  <CardTitle>Occupied</CardTitle>
-                  {data?.life_being?.presence_state ? 'Yes' : 'No'}
-                </CardBody>
-              </Card>
-            </Col>
-          </Row>
-        </Container>
+        <Row>
+          <Col xs={12} md={6}>
+            <Card>
+              <CardBody>
+                <CardTitle>Temperature</CardTitle>
+                {iaqData?.temperature ?? "N/A"}
+              </CardBody>
+            </Card>
+          </Col>
+          <Col xs={12} md={6}>
+            <Card>
+              <CardBody>
+                <CardTitle>Humidity</CardTitle>
+                {iaqData?.humidity ?? "N/A"}
+              </CardBody>
+            </Card>
+          </Col>
+        </Row>
+
+        <Row className="mt-3">
+          <Col xs={12} md={6}>
+            <Card>
+              <CardBody>
+                <CardTitle>CO₂</CardTitle>
+                {iaqData?.co2 ?? "N/A"}
+              </CardBody>
+            </Card>
+          </Col>
+          <Col xs={12} md={6}>
+            <Card>
+              <CardBody>
+                <CardTitle>Occupied</CardTitle>
+                {lifeBeingData?.presence_state ? "Yes" : "No"}
+              </CardBody>
+            </Card>
+          </Col>
+        </Row>
       </CardBody>
     </Card>
   );
