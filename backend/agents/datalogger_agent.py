@@ -80,6 +80,7 @@ def start_datalogger():
     queue = channel.queue_declare(queue='', exclusive=True).method.queue
     channel.queue_bind(exchange=EXCHANGE_NAME, queue=queue, routing_key="sensor.iaq")
     channel.queue_bind(exchange=EXCHANGE_NAME, queue=queue, routing_key="sensor.lifebeing")
+    channel.queue_bind(exchange=EXCHANGE_NAME, queue=queue, routing_key="sensor.energy")
 
     channel.basic_consume(queue=queue, on_message_callback=callback, auto_ack=True)
     channel.start_consuming()
