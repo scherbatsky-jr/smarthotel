@@ -17,15 +17,13 @@ RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "localhost")
 RABBITMQ_PORT = int(os.getenv("RABBITMQ_PORT", 5672))
 
 def get_room_key_from_filename(filename):
-    # Extracts H1_F1_R1 from "power_meter_data_H1_F1_R1.csv"
-    return filename.split("power_meter_data_")[-1].split(".csv")[0]
-
+    # Matches files like "power_meter_data_R1.csv"
+    return filename.split("power_meter_data_")[-1].replace(".csv", "").strip()
 
 def read_csv(filepath):
     df = pd.read_csv(filepath, parse_dates=["datetime"])
     df = df.sort_values("datetime")
     return df.to_dict(orient="records")
-
 
 def run_energy_publisher(filepath):
     room_key = get_room_key_from_filename(filepath)
@@ -42,7 +40,6 @@ def run_energy_publisher(filepath):
     i = 0
     while True:
         row = rows[i % len(rows)]
-
         now = datetime.utcnow().isoformat()
 
         for meter_num in range(1, 7):
@@ -50,7 +47,7 @@ def run_energy_publisher(filepath):
             device_id = f"power_meter_{meter_num}_{room_key}"
 
             payload = {
-                "datetime": row["datetime"].isoformat(),
+                "datetime": now,  # use current timestamp instead of original
                 "device_id": device_id,
                 "power": row[meter_key],
             }
@@ -64,7 +61,6 @@ def run_energy_publisher(filepath):
 
         i += 1
         time.sleep(5)
-
 
 def start_energy_agents():
     csv_files = glob.glob(os.path.join(CSV_DIR, "power_meter_data_*.csv"))
