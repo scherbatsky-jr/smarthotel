@@ -106,18 +106,18 @@ The django server will be running at `http://localhost:10205`
 
 ### Running agents to record the realtime data from sensors and power meters
 
-To mock the real time consumption of the data from sensors and power meters, please place the CSV files in the `agents/sample-data folder`. The name of the file should clearly reflect hotel id, floor id and room id, as the name should be in following format for following devices:
+To mock the real time consumption of the data from sensors and power meters, please place the CSV files in the `agents/sample-data folder`. The name of the file should clearly reflect room id, as the name should be in following format for following devices:
 
-- IAQ Sensor : iaq_data_H<hotel_id>_F<floor_id>_R<room_id>.csv
-- Presence Sensor : presence_sensor_data_H<hotel_id>_F<floor_id>_R<room_id>.csv
-- Power Meter : power_meter_data_H<hotel_id>_F<floor_id>_R<room_id>.csv
+- IAQ Sensor : iaq_data_R<room_id>.csv
+- Presence Sensor : presence_sensor_data_R<room_id>.csv
+- Power Meter : power_meter_data_R<room_id>.csv
 
 All the id values are to be assigned from the relational database tables for Hotel, Floor and Room respectively. 
 Example:
 For Room 101 (ID: 1) in Floor 1 (ID: 1) of Hotel Altotech (ID: 1), the appropriate csv file names would be:
-- iaq_data_H1_F1_R1.csv
-- presence_sensor_data_H1_F1_R1.csv
-- power_meter_data_H1_F1_R3.csv
+- iaq_data_R1.csv
+- presence_sensor_data_R1.csv
+- power_meter_data_R1.csv
 
 To start the agents to publish the data, simple run the command
 
