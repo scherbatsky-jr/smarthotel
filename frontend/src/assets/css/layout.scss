@@ -1,11 +1,14 @@
 .layout {
+    min-height: 100vh;
     &__navbar {
         background-color: indigo;
     }
 
     &__content {
+        flex: 1;
         background-color: #f5f7fa;
         margin-top: 4rem;
+        min-height: 99vh;
 
         .icon {
             font-size: 1.5rem;

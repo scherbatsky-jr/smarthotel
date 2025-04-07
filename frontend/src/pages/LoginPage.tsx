@@ -17,7 +17,7 @@ export default function LoginPage({ onLogin }: { onLogin: () => void }) {
 
   return (
     <Container className="p-4" style={{ maxWidth: 400 }}>
-      <h3 className="text-center mb-4">Welcome to SmartHotel</h3>
+      <h3 className="text-center mb-4">Welcome</h3>
       {error && <Alert variant="danger">{error}</Alert>}
 
       <Form.Group className="mb-3">

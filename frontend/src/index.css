@@ -1,7 +1,6 @@
 html {
-    height: 100vh;
+    height: 100%;
 }
-
 body {
     background-color: #f5f7fa !important;
     font-family: 'Roboto', sans-serif !important;

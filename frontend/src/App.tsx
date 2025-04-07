@@ -17,7 +17,7 @@ function App() {
 
   return (
     <Router>
-      <Container fluid className="p-0">
+      <Container fluid className="p-0 layout">
         <Row>
           <Col>
             <Navbar variant="dark" fixed="top" className="shadow-sm justify-content-between layout__navbar">
@@ -48,7 +48,7 @@ function App() {
         </Row>
 
 
-          <footer className="bg-dark text-white py-3 fixed-bottom mt-auto">
+          <footer className="bg-dark text-white fixed-bottom py-3 mt-auto">
             <Container>
               <Row className="text-center">
                 <Col>
