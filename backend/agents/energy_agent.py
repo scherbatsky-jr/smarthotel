@@ -4,6 +4,7 @@ import json
 import glob
 import pika
 import pandas as pd
+from django.db import connection
 from datetime import datetime
 from threading import Thread
 from dotenv import load_dotenv
@@ -25,8 +26,37 @@ def read_csv(filepath):
     df = df.sort_values("datetime")
     return df.to_dict(orient="records")
 
+def get_power_meter_device_ids_for_room(room_id):
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT id, metadata
+            FROM hotel_device
+            WHERE room_id = %s AND device_type = 'power_meter'
+        """, [room_id])
+        rows = cursor.fetchall()
+        cursor.close()
+
+        result = {}
+        for device_id, metadata in rows:
+            try:
+                meta = json.loads(metadata)
+                name = meta.get("name")  # e.g., power_meter_1
+                if name:
+                    result[name] = device_id
+            except Exception as e:
+                print(f"[Warning] Could not parse metadata for device {device_id}: {e}")
+        return result  # { "power_meter_1": 23, "power_meter_2": 24, ... }
+
 def run_energy_publisher(filepath):
     room_key = get_room_key_from_filename(filepath)
+    room_id = int(room_key[1:])  # remove 'R' and convert to int
+    print(room_id)
+    # Load device mapping from DB
+    meter_name_to_id = get_power_meter_device_ids_for_room(room_id)
+    if not meter_name_to_id:
+        print(f"[EnergyAgent-{room_key}] No power meter devices found in DB for room ID {room_id}")
+        return
+
     rows = read_csv(filepath)
 
     connection = pika.BlockingConnection(
@@ -43,12 +73,19 @@ def run_energy_publisher(filepath):
         now = datetime.utcnow().isoformat()
 
         for meter_num in range(1, 7):
-            meter_key = f"power_kw_power_meter_{meter_num}"
-            device_id = f"power_meter_{meter_num}_{room_key}"
+            meter_name = f"power_meter_{meter_num}"
+            device_id = meter_name_to_id.get(meter_name)
+            if not device_id:
+                continue
+
+            meter_key = f"power_kw_{meter_name}"
+            print(meter_key)
+            if meter_key not in row:
+                continue
 
             payload = {
-                "datetime": now,  # use current timestamp instead of original
-                "device_id": device_id,
+                "datetime": now,
+                "device_id": str(device_id),
                 "power": row[meter_key],
             }
 

@@ -8,6 +8,7 @@ import {
   Form,
   InputGroup,
 } from "react-bootstrap";
+import { marked } from "marked";
 import { sendChatMessage } from "../services/chatService";
 
 export default function ChatPanel() {
@@ -56,7 +57,11 @@ export default function ChatPanel() {
                   }`}
                   style={{ maxWidth: "70%" }}
                 >
-                  {msg.text}
+                  {msg.sender === "user" ? (
+                    msg.text
+                  ) : (
+                    <div dangerouslySetInnerHTML={{ __html: marked.parse(msg.text) }} />
+                  )}
                 </div>
               </div>
             ))}

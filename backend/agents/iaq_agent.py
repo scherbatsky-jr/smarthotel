@@ -16,12 +16,10 @@ ROUTING_KEY = "sensor.iaq"
 RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "localhost")
 RABBITMQ_PORT = int(os.getenv("RABBITMQ_PORT", 5672))
 
-def parse_room_key_from_filename(filename: str):
-    """
-    Extract room_key from filename like: iaq_data_R1.csv → R1
-    """
+def get_device_id_from_filename(filename: str) -> int:
+    """Extract device ID from filename like iaq_data_D1.csv"""
     base = os.path.basename(filename).replace(".csv", "")
-    return base.split("iaq_data_")[-1].strip()
+    return int(base.split("_D")[-1])
 
 def read_csv(filepath):
     df = pd.read_csv(filepath, parse_dates=["datetime"])
@@ -29,8 +27,7 @@ def read_csv(filepath):
     return df.to_dict(orient="records")
 
 def run_iaq_publisher(filepath):
-    room_key = parse_room_key_from_filename(filepath)
-    device_id = f"iaq_sensor_{room_key}"
+    device_id = get_device_id_from_filename(filepath)
     rows = read_csv(filepath)
 
     connection = pika.BlockingConnection(
@@ -39,14 +36,14 @@ def run_iaq_publisher(filepath):
     channel = connection.channel()
     channel.exchange_declare(exchange=EXCHANGE_NAME, exchange_type='topic')
 
-    print(f"[IAQ Thread - {room_key}] Starting")
+    print(f"[IAQ Thread - D{device_id}] Starting")
 
     i = 0
     while True:
         row = rows[i % len(rows)]
         payload = {
             "device_id": device_id,
-            "datetime": datetime.utcnow().isoformat(),  # Current timestamp
+            "datetime": datetime.utcnow().isoformat(),
             "temperature": row["temperature"],
             "humidity": row["humidity"],
             "co2": row["co2"]
@@ -58,12 +55,12 @@ def run_iaq_publisher(filepath):
             body=json.dumps(payload)
         )
 
-        print(f"[IAQ Thread - {room_key}] Published → {payload}")
+        print(f"[IAQ Thread - D{device_id}] Published → {payload}")
         time.sleep(5)
         i += 1
 
 def start_iaq_agents():
-    csv_files = glob.glob(os.path.join(CSV_DIR, "iaq_data_*.csv"))
+    csv_files = glob.glob(os.path.join(CSV_DIR, "iaq_data_D*.csv"))
 
     for filepath in csv_files:
         thread = Thread(target=run_iaq_publisher, args=(filepath,), daemon=True)

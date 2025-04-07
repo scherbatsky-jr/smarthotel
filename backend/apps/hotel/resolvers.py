@@ -16,7 +16,7 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 def fetch_latest_data_from_supabase(room_id):
     # Fetch device IDs from hotel_device table
     with connection.cursor() as cursor:
-        cursor.execute("SELECT device_type, device_id FROM hotel_device WHERE room_id = %s", [room_id])
+        cursor.execute("SELECT device_type, id FROM hotel_device WHERE room_id = %s", [room_id])
         devices = cursor.fetchall()
 
     device_map = {"iaq_sensor": [], "presence_sensor": []}
@@ -41,14 +41,68 @@ def fetch_latest_data_from_supabase(room_id):
             "temperature": iaq.get("temperature", {}).get("value"),
             "humidity": iaq.get("humidity", {}).get("value"),
             "co2": iaq.get("co2", {}).get("value"),
-            "timestamp": iaq.get("temperature", {}).get("timestamp"),
+            "timestamp": iaq.get("temperature", {}).get("updated_at"),
         },
         "life_being": {
             "presence_state": lb.get("presence_state", {}).get("value"),
             "sensitivity": lb.get("sensitivity", {}).get("value"),
-            "timestamp": lb.get("presence_state", {}).get("timestamp"),
+            "timestamp": lb.get("presence_state", {}).get("updated_at"),
         }
     }
+
+def get_room_historical_summary(room_id, datapoint, stat, start_time=None, end_time=None):
+    # Step 1: Find device_ids for the room
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT id FROM hotel_device
+            WHERE room_id = %s
+        """, [room_id])
+        device_ids = [r[0] for r in cursor.fetchall()]
+
+    if not device_ids:
+        return {"error": "No devices found for the room."}
+
+    placeholders = ",".join(["%s"] * len(device_ids))
+    sql_params = [datapoint] + device_ids
+
+    query = f"""
+        SELECT value::FLOAT, datetime
+        FROM raw_data
+        WHERE datapoint = %s
+          AND device_id IN ({placeholders})
+    """
+
+    if start_time:
+        query += " AND datetime >= %s"
+        sql_params.append(start_time)
+    if end_time:
+        query += " AND datetime <= %s"
+        sql_params.append(end_time)
+
+    query += " ORDER BY datetime DESC"
+
+    with connection.cursor() as cursor:
+        cursor.execute(query, sql_params)
+        rows = cursor.fetchall()
+
+    if not rows:
+        return {"message": "No data found for the given parameters."}
+
+    values = [float(row[0]) for row in rows]
+
+    if stat == "average":
+        return {"average": round(sum(values) / len(values), 2)}
+    elif stat == "max":
+        return {"max": max(values)}
+    elif stat == "min":
+        return {"min": min(values)}
+    elif stat == "last_seen" and datapoint == "presence_state":
+        for value, dt in rows:
+            if value == "1":
+                return {"last_occupied_at": dt.isoformat()}
+        return {"last_occupied_at": "Not occupied in selected time range"}
+
+    return {"message": "Invalid stat or unsupported datapoint"}
 
 def get_hotels():
     with connection.cursor() as cursor:
@@ -108,28 +162,23 @@ def get_all_rooms_by_hotel(hotel_id):
 def get_sensors_by_room(room_id):
     with connection.cursor() as cursor:
         cursor.execute("""
-            SELECT id, device_id, device_type
+            SELECT id, device_type
             FROM hotel_device
             WHERE room_id = %s
         """, [room_id])
         rows = cursor.fetchall()
     return [
-        {"id": r[0], "device_id": r[1], "device_type": r[2]}
+        {"id": r[0], "device_type": r[1]}
         for r in rows
     ]
 
-def get_room_energy_summary(resolution, subsystem=None, user_info=None):
-    if not user_info:
-        return {"error": "Missing guest context."}
-
-    room_id = user_info.get("room_id")
-    guest_name = user_info.get("guest_name")
-
+def get_room_energy_summary(resolution, reservation_id, room_id, subsystem=None):
     if not room_id:
         return {"error": "Missing room_id in user info."}
 
-    reservation = Reservation.objects.filter(room_id=room_id).order_by("-start_date").first()
-    if not reservation:
+    reservation = Reservation.objects.get(id=reservation_id)
+
+    if not reservation.room.id == room_id:
         return {"error": "No reservation found for the given room."}
 
     csv_content = get_energy_consumption_by_room(
@@ -151,7 +200,6 @@ def get_room_energy_summary(resolution, subsystem=None, user_info=None):
     public_url = f"{settings.BASE_URL}/api/downloads/{filename}"
 
     return {
-        "guest_name": guest_name,
         "room_id": room_id,
         "start_date": reservation.start_date.isoformat(),
         "end_date": now().isoformat(),
@@ -161,6 +209,7 @@ def get_room_energy_summary(resolution, subsystem=None, user_info=None):
 
 FUNCTION_RESOLVERS = {
     "get_latest_sensor_data": fetch_latest_data_from_supabase,
+    "get_room_historical_summary": get_room_historical_summary,
     "get_sensors_by_room": get_sensors_by_room,
     "get_floors_by_hotel": get_floors_by_hotel,
     "get_rooms_by_floor": get_rooms_by_floor,

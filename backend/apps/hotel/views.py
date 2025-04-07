@@ -33,36 +33,77 @@ def get_rooms_on_floor(request, floor_id):
 @api_view(["POST"])
 def login_by_passkey(request):
     passkey = request.data.get("passkey")
-    reservation = Reservation.objects.select_related("guest", "room__floor__hotel").filter(passkey=passkey).first()
+    reservation = Reservation.objects.select_related(
+        "guest", "room__floor__hotel"
+    ).prefetch_related("room__devices").filter(passkey=passkey).first()
 
-    if reservation:
-        guest = reservation.guest
-        return Response({
-            "guest": {
+    if not reservation:
+        return Response({"error": "Invalid passkey"}, status=404)
+
+    room = reservation.room
+    floor = room.floor
+    hotel = floor.hotel
+    guest = reservation.guest
+
+    devices = [
+        {
+            "id": device.id,
+            "device_type": device.device_type,
+        }
+        for device in room.devices.all()
+    ]
+
+    return Response({
+        "reservation": {
+            "id": reservation.id,
+            "start_date": reservation.start_date,
+            "end_date": reservation.end_date,
+            "guest_info": {
                 "first_name": guest.first_name,
                 "last_name": guest.last_name,
                 "contact": guest.contact,
                 "address": guest.address,
             },
-            "room_id": reservation.room.id,
-            "room_name": reservation.room.number,
-            "floor_id": reservation.room.floor.id,
-            "floor_name": reservation.room.floor.number,
-            "hotel_id": reservation.room.floor.hotel.id,
-            "hotel_name": reservation.room.floor.hotel.name,
-        })
-
-    return Response({"error": "Invalid passkey"}, status=404)
+            "hotel": {
+                "id": hotel.id,
+                "name": hotel.name,
+                "floor": {
+                    "id": floor.id,
+                    "number": floor.number,
+                    "room": {
+                        "id": room.id,
+                        "name": room.number,
+                        "devices": devices
+                    }
+                }
+            }
+        }
+    })
 
 @api_view(["POST"])
 def chat_view(request):
     user_message = request.data.get("message", "")
     user_info = request.data.get("user_info", {})
 
+    system_context = f"""
+        You are a smart hotel assistant helping a guest.
+        The guest is currently staying in:
+
+        - Hotel ID: {user_info['hotel_id']}
+        - Floor ID: {user_info['floor_id']}
+        - Room ID: {user_info['room_id']}
+        - Room Name: {user_info.get('room_name', '')}
+        - Reservation ID: {user_info['reservation_id']}
+
+        They are only allowed to access information related to **their own room**.
+        If they ask about another room, you must politely deny the request.
+        Use the functions responsibly and only for their room.
+        """
+
     chat_response = client.chat.completions.create(
         model="gpt-4",
         messages=[
-            {"role": "system", "content": "You are a smart hotel assistant. Use the available functions to answer guest queries based on their hotel, floor, and room."},
+            {"role": "system", "content": system_context},
             {"role": "user", "content": user_message}
         ],
         functions=FUNCTIONS,
@@ -77,35 +118,27 @@ def chat_view(request):
 
         try:
             args = normalize_function_arguments(fn_name, args, user_info)
+            resolver = FUNCTION_RESOLVERS.get(fn_name)
+            if not resolver:
+                return Response({"reply": f"Function {fn_name} is not yet implemented."})
+
+            result = resolver(**args)
+
+            second_response = client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": system_context},
+                    {"role": "user", "content": user_message},
+                    msg,
+                    {"role": "function", "name": fn_name, "content": json.dumps(result)}
+                ]
+            )
+            return Response({"reply": second_response.choices[0].message.content})
+
         except PermissionError as e:
             return Response({"reply": str(e)})
-
-        resolver = FUNCTION_RESOLVERS.get(fn_name)
-        if not resolver:
-            return Response({"reply": f"Function {fn_name} is not yet implemented."})
-
-        try:
-            # Only pass user_info separately if needed
-            if fn_name == "get_room_energy_summary":
-                # Remove room_id injected by LLM to avoid duplicate
-                args.pop("room_id", None)
-                result = resolver(user_info=user_info, **args)
-            else:
-                result = resolver(**args)
-
         except Exception as e:
             return Response({"reply": f"An error occurred while processing the function: {str(e)}"})
-
-        second_response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a smart hotel assistant."},
-                {"role": "user", "content": user_message},
-                msg,
-                {"role": "function", "name": fn_name, "content": json.dumps(result)}
-            ]
-        )
-        return Response({"reply": second_response.choices[0].message.content})
 
     return Response({"reply": msg.content})
 

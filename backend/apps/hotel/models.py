@@ -29,12 +29,11 @@ class Device(models.Model):
     ]
 
     room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name='devices')
-    device_id = models.CharField(max_length=50, unique=True)
     device_type = models.CharField(max_length=20, choices=DEVICE_TYPES)
     metadata = models.JSONField(blank=True, null=True)
 
     def __str__(self):
-        return f"{self.device_type} ({self.device_id}) in {self.room}"
+        return f"{self.device_type} ({self.device_type}) in {self.room}"
 
 
 class Guest(models.Model):

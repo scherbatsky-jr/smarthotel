@@ -3,37 +3,50 @@ import { supabase } from "../services/supabaseService";
 import { Card, CardHeader, CardTitle, CardBody, Row, Col } from "react-bootstrap";
 
 type DeviceData = {
-  device_id: string;
+  device_id: number;
   datapoint: string;
   value: string | number;
 };
 
 export default function DashboardPanel() {
   const userInfo = JSON.parse(localStorage.getItem("user_info") || "{}");
-  const { hotel_id, floor_id, room_id, guest, room_name, hotel_name } = userInfo;
 
-  const guest_name = `${guest.first_name} ${guest.last_name}`
+  const hotel = userInfo.hotel || {};
+  const floor = hotel.floor || {};
+  const room = floor.room || {};
+  const guest = userInfo.guest_info || {};
+
+  const hotel_name = hotel.name;
+  const room_name = room.name;
+  const guest_name = `${guest.first_name ?? ""} ${guest.last_name ?? ""}`;
+
+  const deviceIds: number[] = (room.devices || []).map((d: any) => d.id);
 
   const [iaqData, setIaqData] = useState<any>({});
   const [lifeBeingData, setLifeBeingData] = useState<any>({});
 
   useEffect(() => {
-    const deviceIdPattern = `_R${room_id}`;
+    if (deviceIds.length === 0) return;
 
     const fetchInitialData = async () => {
       const { data, error } = await supabase
         .from("realtime_data")
         .select("*")
-        .like("device_id", `%${deviceIdPattern}`);
+        .in("device_id", deviceIds);
 
       if (data) {
         const iaq: any = {};
         const lb: any = {};
 
         data.forEach((row) => {
-          if (row.device_id.startsWith("iaq_sensor")) {
+          const devId = row.device_id;
+          const matchingDevice = room.devices.find((d: any) => d.id === devId);
+
+          if (!matchingDevice) return;
+
+          if (matchingDevice.device_type === "iaq_sensor") {
             iaq[row.datapoint] = row.value;
-          } else if (row.device_id.startsWith("presence_sensor")) {
+          } else if (matchingDevice.device_type === "presence_sensor") {
             lb[row.datapoint] = row.value;
           }
         });
@@ -48,32 +61,35 @@ export default function DashboardPanel() {
     fetchInitialData();
 
     const channel = supabase
-    .channel("room-data")
-    .on(
-      "postgres_changes",
-      {
-        event: "UPDATE",
-        schema: "public",
-        table: "realtime_data"
-      },
-      (payload) => {
-        const { device_id, datapoint, value } = payload.new as DeviceData;
+      .channel("room-data")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "realtime_data",
+        },
+        (payload) => {
+          const { device_id, datapoint, value } = payload.new as DeviceData;
 
-        if (!device_id.includes(deviceIdPattern)) return;
+          if (!deviceIds.includes(device_id)) return;
 
-        if (device_id.startsWith("iaq_sensor")) {
-          setIaqData((prev: any) => ({ ...prev, [datapoint]: value }));
-        } else if (device_id.startsWith("presence_sensor")) {
-          setLifeBeingData((prev: any) => ({ ...prev, [datapoint]: value }));
+          const matchingDevice = room.devices.find((d: any) => d.id === device_id);
+          if (!matchingDevice) return;
+
+          if (matchingDevice.device_type === "iaq_sensor") {
+            setIaqData((prev: any) => ({ ...prev, [datapoint]: value }));
+          } else if (matchingDevice.device_type === "presence_sensor") {
+            setLifeBeingData((prev: any) => ({ ...prev, [datapoint]: value }));
+          }
         }
-      }
-    )
-    .subscribe();
+      )
+      .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [hotel_id, floor_id, room_id]);
+  }, [deviceIds.join(",")]); // rerun if devices change
 
   return (
     <Card>
