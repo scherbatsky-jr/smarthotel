@@ -5,11 +5,15 @@ import {
   CardHeader,
   CardBody,
   CardTitle,
+  Container,
   Form,
   InputGroup,
+  Row,
+  Col
 } from "react-bootstrap";
 import { marked } from "marked";
 import { sendChatMessage } from "../services/chatService";
+import { BsFillSendFill } from "react-icons/bs";
 
 export default function ChatPanel() {
   const [messages, setMessages] = useState<{ sender: string; text: string }[]>([]);
@@ -32,14 +36,13 @@ export default function ChatPanel() {
   }, [messages]);
 
   return (
-    <div className="d-flex flex-column">
-      <Card className="flex-grow-1 d-flex flex-column">
-        <CardHeader>
-          <CardTitle>Chat with Me!</CardTitle>
-        </CardHeader>
-        <CardBody className="d-flex flex-column p-0">
-          {/* Scrollable message container */}
-          <div className="flex-grow-1 overflow-auto p-3 bg-light" style={{ height: "20rem", overflowY: "scroll" }}>
+    <Container>
+      <Row>
+        <div>Chat with our smart assistant!</div>
+      </Row>
+      <Row className="mt-1">
+      <Card>
+      <div className="flex-grow-1 overflow-auto p-3 bg-light" style={{ height: "20rem", overflowY: "scroll" }}>
             {messages.map((msg, idx) => (
               <div
                 key={idx}
@@ -67,10 +70,8 @@ export default function ChatPanel() {
             ))}
             <div ref={messagesEndRef} />
           </div>
-
-          {/* Fixed input */}
-          <div className="p-3 border-top bg-white">
-            <InputGroup>
+          <Row className="chat-input-box p-2">
+            <Col xs={10}>
               <Form.Control
                 type="text"
                 value={input}
@@ -78,13 +79,15 @@ export default function ChatPanel() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && send()}
               />
+            </Col>
+            <Col xs={2}>
               <Button onClick={send} variant="primary">
-                Send
+                <BsFillSendFill />
               </Button>
-            </InputGroup>
-          </div>
-        </CardBody>
-      </Card>
-    </div>
-  );
+            </Col>
+          </Row>
+        </Card>
+      </Row>
+    </Container>
+  )
 }

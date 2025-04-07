@@ -10,10 +10,16 @@ export default function AssistantPage() {
         <DashboardPanel />
         </Col>
       </Row>
+      <Row className="mt-3 d-flex justify-content-center">
+        <hr  className="m-1"/>
+      </Row>
       <Row className="mt-3">
         <Col>
           <ChatPanel />
         </Col>
+      </Row>
+      <Row className="mt-3 d-flex justify-content-center">
+        <hr  className="m-1"/>
       </Row>
     </Container>
   );

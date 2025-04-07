@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../services/supabaseService";
-import { Card, CardHeader, CardTitle, CardBody, Row, Col } from "react-bootstrap";
+import { Card, CardHeader, CardTitle, CardBody, Row, Col, Container } from "react-bootstrap";
+import { FaTemperatureHigh } from "react-icons/fa";
+import { WiHumidity } from "react-icons/wi";
+import { FaWind } from "react-icons/fa6";
+import { FaUserGroup } from "react-icons/fa6";
 
 type DeviceData = {
   device_id: number;
@@ -92,52 +96,60 @@ export default function DashboardPanel() {
   }, [deviceIds.join(",")]); // rerun if devices change
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Welcome to {hotel_name}!</CardTitle>
-      </CardHeader>
-      <CardBody>
-        <p>Guest Name: {guest_name}</p>
-        <p>Room: {room_name}</p>
-
-        <Row>
-          <Col xs={12} md={6}>
+    <Container>
+      <Row>
+        <h4> Welcome to { hotel_name }</h4>
+        <div>Guest Name: {guest_name}</div>
+        <div>Room: {room_name}</div>
+      </Row>
+      <Row className="mt-2">
+          <Col xs={6}>
             <Card>
               <CardBody>
-                <CardTitle>Temperature</CardTitle>
-                {iaqData?.temperature ?? "N/A"}
+                <div className="d-flex align-items-center w-100 justify-content-between">
+                  <CardTitle>Temperature</CardTitle>
+                  <FaTemperatureHigh className="icon"/>
+                </div>
+                {iaqData?.temperature ? `${iaqData.temperature} C` : "N/A"}
               </CardBody>
             </Card>
           </Col>
-          <Col xs={12} md={6}>
+          <Col xs={6}>
             <Card>
               <CardBody>
-                <CardTitle>Humidity</CardTitle>
-                {iaqData?.humidity ?? "N/A"}
+                <div className="d-flex align-items-center w-100 justify-content-between">
+                  <CardTitle>Humidity</CardTitle>
+                  <WiHumidity className="icon"/>
+                </div>
+                {iaqData?.humidity ? `${iaqData.humidity}%` : "N/A"}
               </CardBody>
             </Card>
           </Col>
         </Row>
-
         <Row className="mt-3">
-          <Col xs={12} md={6}>
+          <Col xs={6}>
             <Card>
               <CardBody>
-                <CardTitle>CO₂</CardTitle>
-                {iaqData?.co2 ?? "N/A"}
+                <div className="d-flex align-items-center w-100 justify-content-between">
+                  <CardTitle>CO₂</CardTitle>
+                  <FaWind className="icon"/>
+                </div>
+                {iaqData?.co2 ? `${iaqData.co2}%` : "N/A"}
               </CardBody>
             </Card>
           </Col>
-          <Col xs={12} md={6}>
+          <Col xs={6}>
             <Card>
               <CardBody>
-                <CardTitle>Occupied</CardTitle>
+                <div className="d-flex align-items-center w-100 justify-content-between">
+                  <CardTitle>Occupied</CardTitle>
+                  <FaUserGroup className="icon"/>
+                </div>
                 {lifeBeingData?.presence_state ? "Yes" : "No"}
               </CardBody>
             </Card>
           </Col>
         </Row>
-      </CardBody>
-    </Card>
+    </Container>
   );
 }

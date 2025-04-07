@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import AssistantPage from './pages/AssistantPage';
 import LoginPage from './pages/LoginPage';
 
+import "@fontsource/roboto";
 import './App.scss';
 import './assets/css/layout.scss';
 import { Navbar, Row, Col, Container, Button } from 'react-bootstrap';
@@ -19,9 +20,9 @@ function App() {
       <Container fluid className="p-0">
         <Row>
           <Col>
-            <Navbar bg="primary" variant="dark" fixed="top" className="shadow-sm justify-content-between">
+            <Navbar variant="dark" fixed="top" className="shadow-sm justify-content-between layout__navbar">
                 <Container className="m-0 justify-content-between">
-                  <Navbar.Brand href="/">SmartHotel Assistant</Navbar.Brand>
+                  <Navbar.Brand href="/">Smart Hotel Assistant</Navbar.Brand>
                   {userInfo && (
                     <Button variant="outline-light" size="sm" onClick={handleLogout}>
                       Logout
@@ -32,7 +33,7 @@ function App() {
           </Col>
         </Row>
 
-        <Row className="layout__content mt-5">
+        <Row className="layout__content">
           <Col>
             <Routes>
               <Route path="/login" element={<LoginPage onLogin={() => window.location.href = "/"} />} />
@@ -45,6 +46,17 @@ function App() {
             </Routes>
           </Col>
         </Row>
+
+
+          <footer className="bg-dark text-white py-3 fixed-bottom mt-auto">
+            <Container>
+              <Row className="text-center">
+                <Col>
+                  <p className="mb-0">Made by Sunil Prajapati</p>
+                </Col>
+              </Row>
+            </Container>
+          </footer>
       </Container>
     </Router>
   );
