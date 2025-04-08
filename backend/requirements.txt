@@ -8,3 +8,4 @@ pika
 django-cors-headers
 openai
 requests
+djangorestframework-simplejwt

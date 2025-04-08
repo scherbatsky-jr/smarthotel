@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef } from "react";
 import { Card, CardHeader, CardTitle, CardBody, Row, Col, Form, Button } from "react-bootstrap";
-import { getGroupedRoomsByHotel } from "../services/hotelService";
+import { getGroupedRoomsByHotel, getHotels } from "../services/hotelService";
 import { supabase } from "../services/supabaseService";
+import { downloadEnergySummary } from "../services/hotelService";
 
 type DeviceData = {
   device_id: number;
@@ -27,8 +28,7 @@ export default function AdminDashboard() {
   }, []);
 
   const fetchHotels = async () => {
-    const res = await fetch(`${import.meta.env.VITE_BACKEND_URL}/hotels`);
-    const data = await res.json();
+    const data = await getHotels();
     setHotels(data);
   };
 
@@ -112,15 +112,17 @@ export default function AdminDashboard() {
       return;
     }
 
-    const url = selectedRoom 
-      ? `${import.meta.env.VITE_BACKEND_URL}/rooms/${selectedRoom.id}/energy_summary/?resolution=${resolution}&start_date=${startDate}&end_date=${endDate}`
-      : `${import.meta.env.VITE_BACKEND_URL}/hotels/${selectedHotelId}/energy_summary/?resolution=${resolution}&start_date=${startDate}&end_date=${endDate}`;
+    const blob = await downloadEnergySummary(
+      selectedHotelId!,
+      selectedRoom?.id || null,
+      resolution,
+      startDate,
+      endDate
+    );
 
-    const response = await fetch(url);
-    const blob = await response.blob();
     const urlBlob = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
-    
+
     a.href = urlBlob;
     a.download = getEnergySummaryFilename();
     document.body.appendChild(a);

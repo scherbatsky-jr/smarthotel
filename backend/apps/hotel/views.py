@@ -1,11 +1,14 @@
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.contrib.auth import authenticate
+from django.contrib.auth.models import User
 from django.db.models import Prefetch
 from django.http import HttpResponse
 from openai import OpenAI
 import os
 import json
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.hotel.models import Hotel, Floor, Room, Reservation
 from .serializers import HotelSerializer, FloorSerializer, RoomSerializer
@@ -18,21 +21,25 @@ from .resolvers import fetch_latest_data_from_supabase
 client = OpenAI(api_key=os.getenv("OPENAI_KEY"))
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def get_hotels(request):
     hotels = Hotel.objects.all()
     return Response(HotelSerializer(hotels, many=True).data)
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def get_floors_in_hotel(request, hotel_id):
     floors = Floor.objects.filter(hotel_id=hotel_id)
     return Response(FloorSerializer(floors, many=True).data)
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def get_rooms_on_floor(request, floor_id):
     rooms = Room.objects.filter(floor_id=floor_id)
     return Response(RoomSerializer(rooms, many=True).data)
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def grouped_rooms_by_hotel(request, hotel_id):
     try:
         floors = Floor.objects.filter(hotel_id=hotel_id).prefetch_related(
@@ -78,8 +85,17 @@ def admin_login(request):
 
     user = authenticate(username=username, password=password)
     if user and user.is_staff:
-        # Later you can add JWT or session support
-        return Response({"token": "dummy-token-for-now"})
+        refresh = RefreshToken.for_user(user)
+        request.session["user_id"] = user.id  # Store user ID in session
+        return Response({
+            "access_token": str(refresh.access_token),
+            "refresh_token": str(refresh),
+            "user_info": {
+                "username": user.username,
+                "email": user.email,
+                "role": "admin"
+            }
+        })
     return Response({"error": "Invalid credentials"}, status=401)
 
 @api_view(["POST"])
@@ -97,6 +113,10 @@ def login_by_passkey(request):
     hotel = floor.hotel
     guest = reservation.guest
 
+    # Create or fetch a user account based on guest contact
+    user, created = User.objects.get_or_create(username=guest.contact)
+    refresh = RefreshToken.for_user(user)
+
     devices = [
         {
             "id": device.id,
@@ -106,16 +126,19 @@ def login_by_passkey(request):
     ]
 
     return Response({
+        "access_token": str(refresh.access_token),
+        "refresh_token": str(refresh),
+        "user_info": {
+            "first_name": guest.first_name,
+            "last_name": guest.last_name,
+            "contact": guest.contact,
+            "address": guest.address,
+            "role": "guest"
+        },
         "reservation": {
             "id": reservation.id,
             "start_date": reservation.start_date,
             "end_date": reservation.end_date,
-            "guest_info": {
-                "first_name": guest.first_name,
-                "last_name": guest.last_name,
-                "contact": guest.contact,
-                "address": guest.address,
-            },
             "hotel": {
                 "id": hotel.id,
                 "name": hotel.name,
@@ -133,6 +156,7 @@ def login_by_passkey(request):
     })
 
 @api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def chat_view(request):
     user_message = request.data.get("message", "")
     user_info = request.data.get("user_info", {})
@@ -195,10 +219,12 @@ def chat_view(request):
     return Response({"reply": msg.content})
 
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def get_latest_room_data(request, room_id):
     return Response(fetch_latest_data_from_supabase(room_id))
 
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def energy_summary_by_room_view(request, room_id):
     resolution = request.query_params.get("resolution")
     subsystem = request.query_params.get("subsystem")
@@ -224,6 +250,7 @@ def energy_summary_by_room_view(request, room_id):
     return response
 
 @api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def energy_summary_by_hotel_view(request, hotel_id):
     resolution = request.GET.get("resolution")
     start_time = request.GET.get("start_time")

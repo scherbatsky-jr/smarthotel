@@ -14,15 +14,15 @@ type DeviceData = {
 
 export default function DashboardPanel() {
   const userInfo = JSON.parse(localStorage.getItem("user_info") || "{}");
+  const reservation = JSON.parse(localStorage.getItem("reservation") || "{}");
 
-  const hotel = userInfo.hotel || {};
+  const hotel = reservation.hotel || {};
   const floor = hotel.floor || {};
   const room = floor.room || {};
-  const guest = userInfo.guest_info || {};
 
   const hotel_name = hotel.name;
   const room_name = room.name;
-  const guest_name = `${guest.first_name ?? ""} ${guest.last_name ?? ""}`;
+  const guest_name = `${userInfo.first_name ?? ""} ${userInfo.last_name ?? ""}`;
 
   const deviceIds: number[] = (room.devices || []).map((d: any) => d.id);
 

@@ -9,7 +9,7 @@ export default function LoginPage({ onLogin }: { onLogin: () => void }) {
   const handleLogin = async () => {
     try {
       await loginWithPasskey(passkey);
-      onLogin(); // Redirect or show assistant
+      window.location.reload();
     } catch {
       setError("Invalid passkey. Please try again.");
     }
