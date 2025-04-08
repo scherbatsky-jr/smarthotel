@@ -1,5 +1,7 @@
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
+from django.contrib.auth import authenticate
+from django.db.models import Prefetch
 from django.http import HttpResponse
 from openai import OpenAI
 import os
@@ -29,6 +31,56 @@ def get_floors_in_hotel(request, hotel_id):
 def get_rooms_on_floor(request, floor_id):
     rooms = Room.objects.filter(floor_id=floor_id)
     return Response(RoomSerializer(rooms, many=True).data)
+
+@api_view(['GET'])
+def grouped_rooms_by_hotel(request, hotel_id):
+    try:
+        floors = Floor.objects.filter(hotel_id=hotel_id).prefetch_related(
+            Prefetch(
+            'rooms',
+            queryset=Room.objects.prefetch_related('devices')
+        )
+        )
+
+        result = []
+
+        for floor in floors:
+            rooms = floor.rooms.all()
+            result.append({
+                "floor": {
+                    "id": floor.id,
+                    "number": floor.number
+                },
+                "rooms": [
+                    {
+                        "id": room.id,
+                        "number": room.number,
+                        "devices": [
+                        {
+                            "id": device.id,
+                            "device_type": device.device_type,
+                        }
+                        for device in room.devices.all()
+                    ]
+                    } for room in rooms
+                ]
+            })
+
+        return Response(result)
+
+    except Hotel.DoesNotExist:
+        return Response({"error": "Hotel not found"}, status=404)
+
+@api_view(["POST"])
+def admin_login(request):
+    username = request.data.get("username")
+    password = request.data.get("password")
+
+    user = authenticate(username=username, password=password)
+    if user and user.is_staff:
+        # Later you can add JWT or session support
+        return Response({"token": "dummy-token-for-now"})
+    return Response({"error": "Invalid credentials"}, status=401)
 
 @api_view(["POST"])
 def login_by_passkey(request):

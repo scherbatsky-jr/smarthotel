@@ -106,13 +106,25 @@ def get_energy_consumption_by_room(room_id, resolution, start_time=None, end_tim
 def get_energy_consumption_by_hotel(hotel_id, resolution, start_time=None, end_time=None, subsystem=None):
     with connection.cursor() as cursor:
         cursor.execute("""
-            SELECT d.id
+            SELECT d.id, d.metadata
             FROM hotel_device d
             JOIN hotel_room r ON d.room_id = r.id
             JOIN hotel_floor f ON r.floor_id = f.id
             WHERE d.device_type = 'power_meter' AND f.hotel_id = %s
         """, [hotel_id])
-        all_devices = [row[0] for row in cursor.fetchall()]
+        rows = cursor.fetchall()
+
+    all_devices = []
+    device_id_to_subsystem = {}
+
+    for device_id, metadata_json in rows:
+        metadata = json.loads(metadata_json) if metadata_json else {}
+        name = metadata.get("name")
+        for subsystem_name, keys in SUBSYSTEM_DEVICE_MAP.items():
+            if name in keys:
+                all_devices.append(device_id)
+                device_id_to_subsystem[device_id] = subsystem_name
+                break
 
     if not all_devices:
         return "timestamp\n"
@@ -161,7 +173,7 @@ def get_energy_consumption_by_hotel(hotel_id, resolution, start_time=None, end_t
     for bucket, device_id, avg_kw in rows:
         ts = bucket.isoformat()
         energy = avg_kw * 1
-        subsystem_type = next((k for k, v in SUBSYSTEM_DEVICE_MAP.items() if any(key in device_id for key in v)), None)
+        subsystem_type = device_id_to_subsystem.get(device_id)
         if subsystem_type:
             summary.setdefault(ts, {}).setdefault(subsystem_type, 0.0)
             summary[ts][subsystem_type] += energy

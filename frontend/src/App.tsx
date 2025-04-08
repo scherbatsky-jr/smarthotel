@@ -1,6 +1,10 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import AssistantPage from './pages/AssistantPage';
 import LoginPage from './pages/LoginPage';
+import Home from './pages/Home';
+import AdminLoginPage from './pages/AdminLogin';
+import AdminDashboardPage from './pages/AdminDashboard';
+
 
 import "@fontsource/roboto";
 import './App.scss';
@@ -37,12 +41,11 @@ function App() {
           <Col>
             <Routes>
               <Route path="/login" element={<LoginPage onLogin={() => window.location.href = "/"} />} />
-              <Route
-                path="/"
-                element={
-                  userInfo ? <AssistantPage /> : <Navigate to="/login" replace />
-                }
-              />
+              <Route path="/" element={<Home />} />
+              <Route path="/login/guest" element={<LoginPage onLogin={() => window.location.href = "/guest"} />} />
+              <Route path="/login/admin" element={<AdminLoginPage />} />
+              <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+              <Route path="/guest/dashboard" element={<AssistantPage />} />
             </Routes>
           </Col>
         </Row>
