@@ -65,8 +65,13 @@ export function getAccessToken(): string | null {
 }
 
 // Fetch user info from localStorage
-export function getUserInfo(): ReservationInfo | null {
+export function getUserInfo(): GuestInfo | null {
   const info = localStorage.getItem('user_info');
+  return info ? JSON.parse(info) : null;
+}
+
+export function getReservationInfo(): ReservationInfo | null {
+  const info = localStorage.getItem('reservation');
   return info ? JSON.parse(info) : null;
 }
 

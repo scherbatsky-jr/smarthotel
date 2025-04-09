@@ -145,7 +145,7 @@ export default function DashboardPanel() {
                   <CardTitle>Occupied</CardTitle>
                   <FaUserGroup className="icon"/>
                 </div>
-                {lifeBeingData?.presence_state ? "Yes" : "No"}
+                {lifeBeingData?.presence_state == 'occupied' ? "Yes" : "No"}
               </CardBody>
             </Card>
           </Col>
